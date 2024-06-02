@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use session;
+use App\Http\Requests\RegisterRequest;
+use App\Rules\StrongPassword;
+
 
 class UserController extends Controller 
 {
@@ -15,29 +18,65 @@ class UserController extends Controller
         return view('auth.register');
     }
  
-    public function register(Request $request)
+    protected function validator(array $data)
     {
-        $request->validate([
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
+        return Validator::make($data, [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
- 
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
- 
-        return redirect('/login')->with('success', 'Registration successful! Please log in.');
     }
+
+
+
+    protected function create(array $data)
+    {
+        $data['name'] = trim($data['name']);
+        $data['email'] = filter_var($data['email'], FILTER_SANITIZE_EMAIL);
+
+        return User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+    }
+
+
+
+    protected function register(RegisterRequest $request)
+    {
+        $data = $request->validated();
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+        // Further logic to log in the user
+    }
+
 
     public function showLoginForm()
 {
     return view('auth.login');
 }
  
-    public function login(Request $request)
+protected function credentials(Request $request)
+{
+    $email = filter_var($request->email, FILTER_SANITIZE_EMAIL);
+    $password = $request->password;
+
+    return ['email' => $email, 'password' => $password];
+}
+
+protected function validateLogin(Request $request)
+{
+    $request->validate([
+        'email' => 'required|string|email|max:255',
+        'password' => 'required|string|min:8',
+    ]);
+}
+
+public function login(Request $request)
     {
     $credentials = $request->only('email', 'password');
  
@@ -47,8 +86,6 @@ class UserController extends Controller
  
             return redirect('/login')->with('error', 'Invalid credentials. Please try again.');
     }
-
-
 
     public function postLogin(Request $request)
     {
